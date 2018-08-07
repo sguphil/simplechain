@@ -10,10 +10,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/mux"
-	"github.com/joho/gotoenv"
+	"github.com/joho/godotenv"
 )
 
 // Block represents each 'item' in the blockchain
@@ -25,6 +26,8 @@ type Block struct {
 	PrevHash string
 }
 
+var Blockchain []Block
+
 // Message takes incoming JSON payload for writing heart rate
 type Message struct {
 	BPM int
@@ -33,7 +36,7 @@ type Message struct {
 var mutex = &sync.Mutex{}
 
 func main() {
-	err := gotoenv.Load()
+	err := godotenv.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,7 +44,7 @@ func main() {
 	go func() {
 		t := time.Now()
 		genesisBlock := Block{}
-		genesisBlock = Block{0, t.string(), 0, calculateHash(genesisBlock), ""}
+		genesisBlock = Block{0, t.String(), 0, calculateHash(genesisBlock), ""}
 		spew.Dump(genesisBlock)
 		mutex.Lock()
 		Blockchain = append(Blockchain, genesisBlock)
@@ -54,7 +57,7 @@ func main() {
 func run() error {
 	mux := makeMuxRouter()
 	httpPort := os.Getenv("PORT")
-	log.Panicln("HTTP Server Listening on port:", httpPort)
+	log.Println("HTTP Server Listening on port:", httpPort)
 	s := &http.Server{
 		Addr: ":" + httpPort,
 		Handler: mux,
@@ -87,7 +90,7 @@ func handleGetBlockchain(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWriteBlock(w http.ResponseWriter, r *http.Request) {
-	w.Header.Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	var m Message
 	
 	decoder := json.NewDecoder(r.Body)
@@ -113,7 +116,7 @@ func handleWriteBlock(w http.ResponseWriter, r *http.Request) {
 
 func respondWithJSON(w http.ResponseWriter, r *http.Request, code int, payload interface{}) { 
 	response, err := json.MarshalIndent(payload, "", " ")
-	if err := nil {
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("HTTP 500: Internal Server Error"))
 		return
@@ -144,7 +147,7 @@ func calculateHash (block Block) string {
 	h := sha256.New()
 	h.Write([]byte(record))
 	hashed := h.Sum(nil)
-	retrun hex.EncodeToString(hashed)
+	return hex.EncodeToString(hashed)
 }
 
 func generateBlock(oldBlock Block, BPM int) Block {
